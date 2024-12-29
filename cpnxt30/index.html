@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Codeforces Contest Calendar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-6xl mx-auto bg-white shadow-lg rounded-lg p-6">
+    <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">Codeforces Contest Calendar</h1>
+
+    <!-- Calendar Grid -->
+    <div id="calendar" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+  </div>
+
+  <script>
+    // Convert a date to Bangladesh Standard Time
+    function convertToBST(date) {
+      const options = {
+        timeZone: "Asia/Dhaka",
+        weekday: "long",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      };
+      return new Intl.DateTimeFormat("en-US", options).format(date);
+    }
+
+    // Fetch contests from Codeforces API
+    async function fetchContests() {
+      try {
+        const response = await fetch("https://codeforces.com/api/contest.list");
+        const data = await response.json();
+
+        if (data.status !== "OK") {
+          throw new Error("Failed to fetch contests");
+        }
+
+        const now = new Date();
+        const fiftyDaysLater = new Date();
+        fiftyDaysLater.setDate(now.getDate() + 50);
+
+        const contests = data.result
+          .filter((contest) => contest.phase === "BEFORE")
+          .map((contest) => ({
+            name: contest.name,
+            start: new Date(contest.startTimeSeconds * 1000),
+            startTime: convertToBST(new Date(contest.startTimeSeconds * 1000)),
+            duration: (contest.durationSeconds / 3600).toFixed(1) + " hrs", // Duration in hours
+            division: contest.name.includes("Div.") ? contest.name.match(/Div\.\s*\d+/)[0] : "All",
+            url: `https://codeforces.com/contest/${contest.id}`,
+          }))
+          .filter(
+            (contest) => contest.start >= now && contest.start <= fiftyDaysLater
+          );
+
+        // Sort contests by start date
+        contests.sort((a, b) => a.start - b.start);
+
+        createCalendar(contests);
+      } catch (error) {
+        console.error("Error fetching contests:", error);
+      }
+    }
+
+    // Create a calendar for the next 50 days
+    function createCalendar(contests) {
+      const calendar = document.getElementById("calendar");
+      const groupedContests = {};
+
+      // Group contests by date
+      contests.forEach((contest) => {
+        const dateKey = `${contest.start.getDate()}/${contest.start.getMonth() + 1}`;
+        if (!groupedContests[dateKey]) {
+          groupedContests[dateKey] = [];
+        }
+        groupedContests[dateKey].push(contest);
+      });
+
+      // Render each day's contests
+      Object.keys(groupedContests).forEach((dateKey) => {
+        groupedContests[dateKey].forEach((contest, index) => {
+          const date = contest.start;
+          const formattedDate = `${date.getDate()}/${date.getMonth() + 1}`;
+          const dayName = convertToBST(date).split(",")[0]; // Extract weekday name
+          const isWeekend = date.getDay() === 5 || date.getDay() === 6; // Friday or Saturday
+
+          // Create contest card
+          const contestCard = document.createElement("div");
+          contestCard.className = `
+            p-4 border border-gray-200 rounded-lg hover:shadow-lg transition duration-300
+            ${isWeekend ? 'bg-red-100' : 'bg-gray-50'}
+          `;
+
+          contestCard.innerHTML = `
+            <div class="text-lg font-bold text-gray-700">${formattedDate} (${dayName})</div>
+            <div class="text-sm text-gray-600">Start: ${contest.startTime}</div>
+            <div class="text-md font-semibold text-blue-800">${contest.name}</div>
+            <div class="text-sm text-gray-600">Division: ${contest.division}</div>
+            <div class="text-sm text-gray-600">Duration: ${contest.duration}</div>
+          `;
+
+          // Add a link to the contest
+          const link = document.createElement("a");
+          link.href = contest.url;
+          link.target = "_blank";
+          link.appendChild(contestCard);
+
+          calendar.appendChild(link);
+        });
+      });
+    }
+
+    fetchContests();
+  </script>
+</body>
+</html>
