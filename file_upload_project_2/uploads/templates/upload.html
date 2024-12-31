@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload with Progress Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the progress bar */
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <div class="max-w-xl mx-auto my-10 p-6 bg-white shadow-lg rounded-lg">
+        <h1 class="text-2xl font-semibold text-center text-gray-800">Upload File to S3</h1>
+        
+        <form id="upload-form" class="mt-6">
+            <input type="file" id="file" name="file" class="w-full py-2 px-3 border border-gray-300 rounded-md" required><br><br>
+            <button type="submit" class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors">Upload</button>
+        </form>
+
+        <!-- Progress Bar -->
+        <div class="mt-6">
+            <label class="text-gray-700">Uploading and Processing</label>
+            <div class="w-full bg-gray-200 rounded-md h-2 mt-2">
+                <div class="progress-bar bg-blue-500 h-2 rounded-md" id="upload-progress" style="width: 0%;"></div>
+            </div>
+            <p id="upload-status" class="text-sm text-gray-600 mt-2">Not started</p>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const uploadProgress = document.getElementById('upload-progress');
+        const uploadStatus = document.getElementById('upload-status');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('file');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file first.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const xhr = new XMLHttpRequest();
+            const startTime = Date.now();
+            let isSimulating = false; // Flag to track if we're in the "middle simulation"
+
+            xhr.open('POST', '', true);
+
+            // Upload progress: Client to server
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    let percentComplete = (event.loaded / event.total) * 80; // Calculate up to 80%
+
+                    if (percentComplete >= 80 && !isSimulating) {
+                        isSimulating = true; // Start the middle simulation once upload reaches 80%
+                        percentComplete = 80; // Lock it at 80% to begin simulation
+
+                        const uploadEndTime = Date.now();
+                        const uploadTime = uploadEndTime - startTime;
+                        const processingTime = uploadTime / 4;
+
+                        let simulatedProgress = 80;
+                        const interval = setInterval(() => {
+                            if (simulatedProgress < 95) {
+                                simulatedProgress += 1; // Increment progress
+                                uploadProgress.style.width = simulatedProgress + '%';
+                                uploadStatus.textContent = `Processing: ${Math.round(simulatedProgress)}%`;
+                            } else {
+                                clearInterval(interval);
+                            }
+                        }, processingTime / 15); // Spread increments over the processing time
+                    }
+
+                    if (!isSimulating) {
+                        // Keep updating upload progress until 80%
+                        uploadProgress.style.width = percentComplete + '%';
+                        uploadStatus.textContent = `Uploading: ${Math.round(percentComplete)}%`;
+                    }
+                }
+            };
+
+            // Server response handling
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    uploadProgress.style.width = '100%'; // Complete the progress bar
+                    uploadStatus.textContent = 'Upload and Processing Complete!';
+                } else {
+                    uploadStatus.textContent = 'Upload failed. Please try again.';
+                }
+            };
+
+            xhr.onerror = () => {
+                uploadStatus.textContent = 'Error occurred while uploading. Please try again.';
+            };
+
+            xhr.send(formData);
+        });
+    </script>
+
+</body>
+</html>
